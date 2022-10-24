@@ -3,13 +3,14 @@
 
 . $PSScriptRoot\..\..\..\Shared\Confirm-ExchangeShell.ps1
 function Invoke-ConfirmExchangeShell {
+    param(
+        [string]$Server
+    )
 
-    #TODO: Fix $Server
     $Script:ExchangeShellComputer = Confirm-ExchangeShell -Identity $Server -CatchActionFunction ${Function:Invoke-CatchActions}
 
-    
     if (-not ($Script:ExchangeShellComputer.ShellLoaded)) {
-        Write-Yellow("Failed to load Exchange Shell... stopping script")
+        Write-Warning "Failed to load Exchange Shell... stopping script"
         $Script:Logger.PreventLogCleanup = $true
         exit
     }
@@ -17,7 +18,7 @@ function Invoke-ConfirmExchangeShell {
     if ($Script:ExchangeShellComputer.ToolsOnly -and
         $env:COMPUTERNAME -eq $Server -and
         -not ($LoadBalancingReport)) {
-        Write-Yellow("Can't run Exchange Health Checker Against a Tools Server. Use the -Server Parameter and provide the server you want to run the script against.")
+        Write-Warning "Can't run Exchange Health Checker Against a Tools Server. Use the -Server Parameter and provide the server you want to run the script against."
         $Script:Logger.PreventLogCleanup = $true
         exit
     }

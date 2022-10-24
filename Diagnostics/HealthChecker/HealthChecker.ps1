@@ -86,9 +86,9 @@
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', '', Justification = 'Variables are being used')]
 [CmdletBinding(DefaultParameterSetName = "HealthChecker", SupportsShouldProcess)]
 param(
-    [Parameter(Mandatory = $false, ParameterSetName = "HealthChecker")]
-    [Parameter(Mandatory = $false, ParameterSetName = "MailboxReport")]
-    [string]$Server = ($env:COMPUTERNAME),
+    [Parameter(Mandatory = $false, ParameterSetName = "HealthChecker", ValueFromPipeline = $true)]
+    [Parameter(Mandatory = $false, ParameterSetName = "MailboxReport", ValueFromPipeline = $true)]
+    [string[]]$Server = ($env:COMPUTERNAME),
     [Parameter(Mandatory = $false)]
     [ValidateScript( { -not $_.ToString().EndsWith('\') -and (Test-Path $_) })][string]$OutputFilePath = ".",
     [Parameter(Mandatory = $false, ParameterSetName = "MailboxReport")]
@@ -153,12 +153,15 @@ begin {
         $Host.PrivateData.VerboseForegroundColor = "Cyan"
     }
 
+    $Script:ServerInstanceList = New-Object System.Collections.Generic.List[string]
     $Script:Logger = Get-NewLoggerInstance -LogName "HealthChecker-Debug" `
         -LogDirectory $Script:OutputFilePath `
         -AppendDateTime $false `
         -ErrorAction SilentlyContinue
     SetProperForegroundColor
     SetWriteVerboseAction ${Function:Write-DebugLog}
+} process {
+    $Script:ServerInstanceList.Add($Server)
 } end {
     try {
 
@@ -246,8 +249,7 @@ begin {
         }
 
         # Main Feature of Health Checker
-        Invoke-SetOutputInstanceLocation -Server $Server -FileName "HealthChecker" -IncludeServerName $true
-        Invoke-ConfirmExchangeShell
+        Invoke-ConfirmExchangeShell -Server $Script:ServerInstanceList[0]
         $currentErrors = $Error.Count
 
         if ((-not $SkipVersionCheck) -and
@@ -260,10 +262,15 @@ begin {
         }
 
         Invoke-ErrorCatchActionLoopFromIndex $currentErrors
-        Test-RequiresServerFqdn -Server $ServerInstance
-        [HealthChecker.HealthCheckerExchangeServer]$HealthObject = Get-HealthCheckerExchangeServer -ServerInstance $ServerInstance
-        $analyzedResults = Invoke-AnalyzerEngine -HealthServerObject $HealthObject
-        Write-ResultsToScreen -ResultsToWrite $analyzedResults.DisplayResults
+
+        foreach ($serverInstance in $Script:ServerInstanceList) {
+            Invoke-SetOutputInstanceLocation -Server $serverInstance -FileName "HealthChecker" -IncludeServerName $true
+            Test-RequiresServerFqdn -Server $serverInstance
+            [HealthChecker.HealthCheckerExchangeServer]$HealthObject = Get-HealthCheckerExchangeServer -ServerInstance $serverInstance
+            $analyzedResults = Invoke-AnalyzerEngine -HealthServerObject $HealthObject
+            Write-ResultsToScreen -ResultsToWrite $analyzedResults.DisplayResults
+        }
+
         $currentErrors = $Error.Count
 
         try {
